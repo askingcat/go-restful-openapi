@@ -7,18 +7,12 @@ import (
 	"strconv"
 	"strings"
 
+	restful "github.com/emicklei/go-restful/v3"
 	"github.com/go-openapi/spec"
-
-	"github.com/emicklei/go-restful/v3"
 )
 
-const (
-	// KeyOpenAPITags is a Metadata key for a restful Route
-	KeyOpenAPITags = "openapi.tags"
-
-	// ExtensionPrefix is the only prefix accepted for VendorExtensible extension keys
-	ExtensionPrefix = "x-"
-)
+// KeyOpenAPITags is a Metadata key for a restful Route
+const KeyOpenAPITags = "openapi.tags"
 
 func buildPaths(ws *restful.WebService, cfg Config) spec.Paths {
 	p := spec.Paths{Paths: map[string]spec.PathItem{}}
@@ -92,29 +86,24 @@ func buildOperation(ws *restful.WebService, r restful.Route, patterns map[string
 			}
 		}
 	}
-
-	extractVendorExtensions(&o.VendorExtensible, r.ExtensionProps)
-
 	// collect any path parameters
 	for _, param := range ws.PathParameters() {
-		p := buildParameter(r, param, patterns[param.Data().Name], cfg)
-		o.Parameters = append(o.Parameters, p)
+		o.Parameters = append(o.Parameters, buildParameter(r, param, patterns[param.Data().Name], cfg))
 	}
 	// route specific params
-	for _, param := range r.ParameterDocs {
-		p := buildParameter(r, param, patterns[param.Data().Name], cfg)
-		o.Parameters = append(o.Parameters, p)
+	for _, each := range r.ParameterDocs {
+		o.Parameters = append(o.Parameters, buildParameter(r, each, patterns[each.Data().Name], cfg))
 	}
 	o.Responses = new(spec.Responses)
 	props := &o.Responses.ResponsesProps
-	props.StatusCodeResponses = make(map[int]spec.Response, len(r.ResponseErrors))
+	props.StatusCodeResponses = map[int]spec.Response{}
 	for k, v := range r.ResponseErrors {
 		r := buildResponse(v, cfg)
 		props.StatusCodeResponses[k] = r
 	}
 	if r.DefaultResponse != nil {
-		rsp := buildResponse(*r.DefaultResponse, cfg)
-		o.Responses.Default = &rsp
+		r := buildResponse(*r.DefaultResponse, cfg)
+		o.Responses.Default = &r
 	}
 	if len(o.Responses.StatusCodeResponses) == 0 {
 		o.Responses.StatusCodeResponses[200] = spec.Response{ResponseProps: spec.ResponseProps{Description: http.StatusText(http.StatusOK)}}
@@ -135,16 +124,6 @@ func stringAutoType(ambiguous string) interface{} {
 		return parsedBool
 	}
 	return ambiguous
-}
-
-func extractVendorExtensions(extensible *spec.VendorExtensible, extensions restful.ExtensionProps) {
-	if len(extensions.Extensions) > 0 {
-		for key := range extensions.Extensions {
-			if strings.HasPrefix(key, ExtensionPrefix) {
-				extensible.AddExtension(key, extensions.Extensions[key])
-			}
-		}
-	}
 }
 
 func buildParameter(r restful.Route, restfulParam *restful.Parameter, pattern string, cfg Config) spec.Parameter {
@@ -200,8 +179,6 @@ func buildParameter(r restful.Route, restfulParam *restful.Parameter, pattern st
 		p.Format = param.DataFormat
 	}
 
-	extractVendorExtensions(&p.VendorExtensible, param.ExtensionProps)
-
 	return p
 }
 
@@ -240,7 +217,6 @@ func buildResponse(e restful.ResponseError, cfg Config) (r spec.Response) {
 			}
 		}
 	}
-	extractVendorExtensions(&r.VendorExtensible, e.ExtensionProps)
 	return r
 }
 
